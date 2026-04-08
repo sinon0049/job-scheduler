@@ -4,4 +4,4 @@ const app = express()
 
 app.use(express.json())
 app.use(routes)
-app.listen(() => 'listening')
+app.listen(() => console.log('listening'))
