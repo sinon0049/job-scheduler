@@ -15,12 +15,12 @@ interface CreateJobInput {
 export class JobServices {
     constructor(private readonly db: PrismaClient) {}
 
-    async createJob(data: CreateJobInput) {
+    createJob = async(data: CreateJobInput) => {
         const newJob = await this.db.job.create({ data })
         return newJob
     }
 
-    async scanExpiredJobs() {
+    scanExpiredJobs = async() => {
         const now = new Date()
         return await this.db.job.updateManyAndReturn({
             where: {
@@ -29,7 +29,8 @@ export class JobServices {
                 },
                 retry_count: {
                     lt: 3
-                }
+                },
+                status: Status.PENDING
             },
             data: {
                 status: Status.PROCESSING
@@ -37,7 +38,7 @@ export class JobServices {
         })
     }
 
-    async processJob(job: JobObj) {
+    processJob = async(job: JobObj) => {
         const int = crypto.randomInt(99)
         let isCompleted = false
         let { retry_count } = job
@@ -50,5 +51,18 @@ export class JobServices {
                 retry_count: isCompleted ? job.retry_count : job.retry_count + 1
             }
         })
+    }
+
+    handleExpiredJobs = async() => {
+        try {
+            const expiredJobs = await this.scanExpiredJobs()
+            if(expiredJobs.length > 0) {
+                await Promise.allSettled(expiredJobs.map((job: JobObj) => this.processJob(job)))
+            }
+        } catch (error) {
+            console.log(error)
+        } finally {
+            setTimeout(this.handleExpiredJobs, 1000)
+        }
     }
 }

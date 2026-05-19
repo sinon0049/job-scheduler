@@ -15,4 +15,8 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     console.log(err)
 })
 
-app.listen(PORT, () => console.log('listening'))
+app.listen(PORT, () => {
+    console.log('listening')
+    jobServices.handleExpiredJobs()
+})
+
