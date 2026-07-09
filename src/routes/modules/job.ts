@@ -3,7 +3,7 @@ import { JobServices } from '../../services/job.services.js'
 const router = express.Router()
 
 export const jobRoutes = (jobServices: JobServices) => {
-    router.post('/create', async (req, res) => {
+    router.post('/create', async (req, res, next) => {
         try {
             const newJob = await jobServices.createJob({
                 run_at: new Date(),
@@ -18,10 +18,9 @@ export const jobRoutes = (jobServices: JobServices) => {
                 data: newJob
             })
         } catch (error) {
-            console.log(error)  
-            return res.status(400).json({
-                status: 'failed',
-                message: error
+            next({
+                statusCode: 400,
+                message: 'Failed to create job, please check your field.'
             })
         }
     })

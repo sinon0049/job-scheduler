@@ -14,6 +14,8 @@ interface CreateJobInput {
     priority: number;
 }
 
+interface JobId extends Pick<JobObj, 'id'> {}
+
 export class JobServices {
     constructor(private readonly db: PrismaClient) {}
 
@@ -26,34 +28,64 @@ export class JobServices {
         const now = new Date()
 
         return await context.run('SCAN', async() => {
-            return await this.db.job.updateManyAndReturn({
-                where: {
-                    run_at: { lte: now },
-                    retry_count: { lt: 3 },
-                    status: Status.PENDING
-                },
-                data: {
-                    status: Status.PROCESSING
-                },
-                limit: 1000
+            return await this.db.$transaction(async (tx) => {
+                const expiredJobs = await tx.$queryRaw<JobId[]>`
+                    SELECT "id" FROM "Job" 
+                    WHERE "run_at" < NOW()
+                    AND "retry_count" < 3
+                    AND "status" = 'PENDING'
+                    LIMIT 20
+                    FOR UPDATE SKIP LOCKED
+                `
+                if(!expiredJobs.length) return []
+
+                await tx.job.updateMany({
+                    where: {
+                        id: {
+                            in: expiredJobs.map((obj: JobId) => obj.id)
+                        }
+                    },
+                    data: {
+                        status: Status.PROCESSING
+                    }
+                })
+
+                return expiredJobs
             })
+            // return await this.db.job.updateManyAndReturn({
+            //     where: {
+            //         run_at: { lte: now },
+            //         retry_count: { lt: 3 },
+            //         status: Status.PENDING
+            //     },
+            //     data: {
+            //         status: Status.PROCESSING
+            //     },
+            //     limit: 1000
+            // })
         })
     }
 
-    processJob = async(job: JobObj) => {
+    processJob = async(job: JobId) => {
         const int = crypto.randomInt(99)
         let isCompleted = false
-        let { retry_count } = job
         int < 50 ? isCompleted = true : isCompleted = false
 
         await context.run('PROC', async() => {
-            await this.db.job.update({
-                where: { id: job.id },
-                data: {
-                    status: isCompleted ? Status.COMPLETED : retry_count === 2 ? Status.FAILED : Status.PENDING,
-                    retry_count: isCompleted ? job.retry_count : job.retry_count + 1
-                }
-            })
+            await this.db.$queryRaw`
+                UPDATE "Job"
+                SET
+                    "retry_count" = CASE
+                        WHEN ${isCompleted} THEN "retry_count"
+                        ELSE "retry_count" + 1
+                    END,
+                    "status" = CASE
+                        WHEN ${isCompleted} THEN 'COMPLETED'::"Status"
+                        WHEN "retry_count" + 1 >= 3 THEN 'FAILED'::"Status"
+                        ELSE 'PENDING'::"Status"
+                    END
+                WHERE "id" = ${job.id}
+            `
         })
     }
 

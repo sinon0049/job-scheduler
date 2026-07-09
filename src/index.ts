@@ -12,11 +12,10 @@ const jobServices = new JobServices(prisma)
 app.use(express.json())
 app.use('/job', jobRoutes(jobServices))
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    console.log(err)
+    res.status(err.statusCode).json(err)
 })
 
 app.listen(PORT, () => {
     console.log('listening')
     jobServices.handleExpiredJobs()
 })
-
