@@ -15,22 +15,20 @@ datasource db {
 model Job {
   id Int @id @default(autoincrement())
   created_at DateTime @default(now())
-  updated_at DateTime @default(now())
+  updated_at DateTime @updatedAt
   run_at DateTime
-  type String
-  payload String
-  status Status
-  priority Int
+  status Status @default(PENDING)
   retry_count Int @default(0)
-  error Error[]
+  JobTrace JobTrace[]
 }
 
-model Error {
+model JobTrace {
   id Int @id @default(autoincrement())
-  job_id Int
-  message Status
+  jobId Int
   created_at DateTime @default(now())
-  job Job @relation(fields: [job_id], references: [id])
+  executedBy String
+  isSuccess Boolean
+  job Job @relation(fields: [jobId], references: [id])
 }
 
 enum Status {

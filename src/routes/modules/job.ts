@@ -6,11 +6,7 @@ export const jobRoutes = (jobServices: JobServices) => {
     router.post('/create', async (req, res, next) => {
         try {
             const newJob = await jobServices.createJob({
-                run_at: new Date(),
-                type: 'email',
-                payload: 'user@example.com',
-                status: 'PENDING',
-                priority: 1
+                run_at: new Date()
             })
 
             return res.status(200).json({
