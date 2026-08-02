@@ -1,0 +1,19 @@
+services:
+  app-1:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - INSTANCE_NAME=inst-1
+  app-2:
+    build: .
+    ports:
+      - "3001:3000"
+    environment:
+      - INSTANCE_NAME=inst-2
+  app-3:
+    build: .
+    ports:
+      - "3002:3000"
+    environment:
+      - INSTANCE_NAME=inst-3
