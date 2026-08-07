@@ -20,6 +20,8 @@ model Job {
   status Status @default(PENDING)
   retry_count Int @default(0)
   JobTrace JobTrace[]
+
+  @@index([status, retry_count, run_at])
 }
 
 model JobTrace {

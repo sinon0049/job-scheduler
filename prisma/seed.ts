@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Status } from "../src/generated/prisma/enums.js";
+import { context } from "../src/lib/loggerContext.js";
 import { Pool } from "pg";
 import { prisma } from "../src/lib/prisma.js"; 
 const connectionString = `${process.env.DATABASE_URL}`;
@@ -9,24 +9,22 @@ async function main() {
     const TOTAL = 100000
     const BATCH_SIZE = 5000
 
-    for(let i = 0; i < TOTAL; i += BATCH_SIZE) {
-        const currentBatchData = []
+    await context.run({ action: 'SEED', jobCount: BATCH_SIZE }, async() => {
+        for(let i = 0; i < TOTAL; i += BATCH_SIZE) {
+            const currentBatchData = []
 
-        for(let j = i; j < i + BATCH_SIZE; j ++) {
-            currentBatchData.push({
-                run_at: new Date(),
-                type: 'email',
-                status: Status.PENDING,
-                priority: 1,
-                payload: `user${j}@example.com`
+            for(let j = i; j < i + BATCH_SIZE; j ++) {
+                currentBatchData.push({
+                    run_at: new Date()
+                })
+            }
+
+            await prisma.job.createMany({
+                data: currentBatchData, 
+                skipDuplicates: true
             })
         }
-
-        await prisma.job.createMany({
-            data: currentBatchData, 
-            skipDuplicates: true
-        })
-    }
+    })
 }
 
 main()
