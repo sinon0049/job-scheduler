@@ -11,8 +11,13 @@ export const prisma = new PrismaClient({
 })
 
 prisma.$on("query", (e) => {
-    console.log(`[${context.getStore()}]`
-    + "Query: " + e.query + "\n" 
-    + "Params: " + e.params + "\n" + 
-    "Duration: " + e.duration + "ms")
+    if(e.query === 'COMMIT' || e.query === 'BEGIN') return
+    const store = context.getStore()
+
+    if(store?.action === 'SCAN') {
+        console.log(`[${context.getStore()?.action}]Scan ${store.jobCount} jobs, Duration: ${e.duration}ms, TimeStamp: ${e.timestamp}`)
+    } else {
+        console.log(`[${context.getStore()?.action}]Duration: ${e.duration}, TimeStamp: ${e.timestamp}`)
+    }
+    //console.log(`[${context.getStore()?.action}]Duration: ${e.duration}, Query: ${e.query.replace(/\s+/g, ' ').trim()}`)
 })

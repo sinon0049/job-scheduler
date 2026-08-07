@@ -12,7 +12,7 @@ export class JobServices {
     constructor(private readonly db: PrismaClient) {}
 
     createJob = async(data: CreateJobInput) => {
-        return await context.run('CREATE', async() => {
+        return await context.run({ action: 'CREATE' }, async() => {
             const newJob = await this.db.job.create({ data })
             return newJob
         }) 
@@ -21,7 +21,7 @@ export class JobServices {
     scanExpiredJobs = async() => {
         const now = new Date()
 
-        return await context.run('SCAN', async() => {
+        return await context.run({ action: 'SCAN', jobCount: 0 }, async() => {
             return await this.db.$transaction(async (tx) => {
                 const expiredJobs = await tx.$queryRaw<ProcessingJob[]>`
                     SELECT "id", "status", "retry_count" FROM "Job" 
@@ -32,6 +32,12 @@ export class JobServices {
                     FOR UPDATE SKIP LOCKED
                 `
                 if(!expiredJobs.length) return []
+
+                const store = context.getStore()
+                if(store) {
+                    store.action = 'UPDATE'
+                    store.jobCount = expiredJobs.length
+                }
 
                 await tx.job.updateMany({
                     where: {
@@ -55,7 +61,7 @@ export class JobServices {
         const currentRetryCount = job.retry_count
         int < 50 ? isCompleted = true : isCompleted = false
 
-        await context.run('PROC', async() => {
+        await context.run({ action: 'PROC' }, async() => {
             return await this.db.$transaction(async(tx) => {
                 await tx.job.update({
                     where: {
