@@ -56,34 +56,38 @@ export class JobServices {
     }
 
     processJob = async(job: ProcessingJob) => {
-        const int = crypto.randomInt(99)
-        let isCompleted = false
-        const currentRetryCount = job.retry_count
-        int < 50 ? isCompleted = true : isCompleted = false
+        try {
+            const int = crypto.randomInt(99)
+            let isCompleted = false
+            const currentRetryCount = job.retry_count
+            int < 50 ? isCompleted = true : isCompleted = false
 
-        await context.run({ action: 'PROC' }, async() => {
-            return await this.db.$transaction(async(tx) => {
-                await tx.job.update({
-                    where: {
-                        id: job.id
-                    },
-                    data: {
-                        retry_count: {
-                            increment: isCompleted ? 0 : 1
+            await context.run({ action: 'PROC', jobId: job.id, status: isCompleted ? 'completed' : 'failed' }, async() => {
+                return await this.db.$transaction(async(tx) => {
+                    await tx.job.update({
+                        where: {
+                            id: job.id
                         },
-                        status: isCompleted ? Status.COMPLETED : (currentRetryCount + 1 >= 3 ? Status.FAILED : Status.PENDING)
-                    }
-                })
+                        data: {
+                            retry_count: {
+                                increment: isCompleted ? 0 : 1
+                            },
+                            status: isCompleted ? Status.COMPLETED : (currentRetryCount + 1 >= 3 ? Status.FAILED : Status.PENDING)
+                        }
+                    })
 
-                await tx.jobTrace.create({
-                    data: {
-                        jobId: job.id,
-                        executedBy: process.env.INSTANCE_NAME || 'default-inst',
-                        isSuccess: isCompleted
-                    }
+                    await tx.jobTrace.create({
+                        data: {
+                            jobId: job.id,
+                            executedBy: process.env.INSTANCE_NAME || 'default-inst',
+                            isSuccess: isCompleted
+                        }
+                    })
                 })
             })
-        })
+        } catch (error) {
+            console.log(`JobId ${job.id} failed, error: ${error}`)
+        }
     }
 
     handleExpiredJobs = async() => {

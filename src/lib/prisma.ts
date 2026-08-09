@@ -13,11 +13,19 @@ export const prisma = new PrismaClient({
 prisma.$on("query", (e) => {
     if(e.query === 'COMMIT' || e.query === 'BEGIN') return
     const store = context.getStore()
+    const duration = e.duration.toFixed(2)
+    const timestamp = e.timestamp.toLocaleTimeString('zh-TW', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    })
 
-    if(store?.action === 'SCAN') {
-        console.log(`[${context.getStore()?.action}]Scan ${store.jobCount} jobs, Duration: ${e.duration}ms, TimeStamp: ${e.timestamp}`)
+    if(store?.action === 'SCAN' || store?.action === 'UPDATE') {
+        console.log(`[${context.getStore()?.action}]${store.jobCount} jobs, Duration: ${duration}ms, TimeStamp: ${timestamp}`)
+    } else if(store?.action === 'PROC') {
+        console.log(`[${context.getStore()?.action}]JobId: ${store.jobId}, Status: ${store.status}, Duration: ${duration}ms, TimeStamp: ${timestamp}`)
     } else {
-        console.log(`[${context.getStore()?.action}]Duration: ${e.duration}, TimeStamp: ${e.timestamp}`)
+        console.log(`[${context.getStore()?.action}]Duration: ${duration}, TimeStamp: ${timestamp}`)
     }
-    //console.log(`[${context.getStore()?.action}]Duration: ${e.duration}, Query: ${e.query.replace(/\s+/g, ' ').trim()}`)
 })

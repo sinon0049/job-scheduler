@@ -9,14 +9,14 @@ export const jobRoutes = (jobServices: JobServices) => {
                 run_at: new Date()
             })
 
-            return res.status(200).json({
+            return res.status(201).json({
                 status: 'success',
                 data: newJob
             })
         } catch (error) {
             next({
-                statusCode: 400,
-                message: 'Failed to create job, please check your field.'
+                statusCode: 500,
+                message: `Failed to create job, error: ${error}`
             })
         }
     })
