@@ -22,7 +22,8 @@ model Job {
   retry_count Int @default(0)
   JobTrace JobTrace[]
 
-  @@index([retry_count, run_at], where: { status: "PENDING" })
+  @@index([retry_count, run_at], where: { status: "PENDING" }, map: "idx_job_scan")
+  @@index([updated_at], where: {status: "PROCESSING"}, map: "idx_job_recover")
 }
 
 model JobTrace {
