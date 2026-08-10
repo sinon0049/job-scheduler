@@ -55,6 +55,42 @@ export class JobServices {
         })
     }
 
+    recoverStuckJobs = async() => {
+        while(true) {
+            try {
+                await this.recoverStuckJobsOnce()
+            } catch (error) {
+                console.log(`Recover stuck job failed, error: ${error}`)
+            } finally {
+                await sleep(5000)
+            }
+        }
+    }
+
+    recoverStuckJobsOnce = async() => {
+        return await context.run({ action: 'RECOVER' }, async() => {
+            return await this.db.$executeRaw`
+                WITH "stuck_jobs" AS (
+                    SELECT "id" FROM "Job"
+                    WHERE "updated_at" < NOW() - INTERVAL '10 minutes'
+                    AND "status" = 'PROCESSING'
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 20
+                )
+                UPDATE "Job"
+                SET 
+                    "status" = CASE
+                        WHEN "retry_count" + 1 >= 3 THEN 'FAILED'
+                        ELSE 'PENDING'
+                    END::"Status",
+                    "retry_count" = "retry_count" + 1
+                WHERE "id" IN (
+                    SELECT "id" FROM "stuck_jobs"
+                )
+            `
+        })
+    }
+
     processJob = async(job: ProcessingJob) => {
         try {
             const int = crypto.randomInt(99)
@@ -103,7 +139,7 @@ export class JobServices {
                     await sleep(5000)
                 }
             } catch (error) {
-                console.log(error)
+                console.log(`Handle job failed, error: ${error}`)
             }
         }  
     }

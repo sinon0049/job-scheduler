@@ -32,7 +32,7 @@ describe('Test', () => {
         assert.strictEqual(testJob.retry_count, 0)
     })
 
-    test('Race condition test', async() => {
+    test('Race condition test for scan', async() => {
         const testJob = await jobServices.createJob({
             run_at: new Date(),
         })
@@ -44,6 +44,37 @@ describe('Test', () => {
             if(scannedJobs.length === 1) {
                 success ++
             } else if(scannedJobs.length === 0) {
+                failed ++
+            }
+        }
+
+        assert.strictEqual(success, 1)
+        assert.strictEqual(failed, 9)
+    })
+
+    test('Race condition test for recover', async() => {
+        await prisma.$executeRaw`
+            INSERT INTO "Job" (
+                "run_at",
+                "updated_at",
+                "status",
+                "retry_count"
+            )
+            VALUES (
+                NOW(),
+                NOW() - INTERVAL '11 minutes',
+                'PROCESSING'::"Status",
+                0
+            )
+        `
+
+        const recoverResult = await Promise.all(Array.from({ length: 10 }, () => jobServices.recoverStuckJobsOnce()))
+
+        let success = 0, failed = 0
+        for(let recoverCount of recoverResult) {
+            if(recoverCount === 1) {
+                success ++
+            } else if(recoverCount === 0) {
                 failed ++
             }
         }
