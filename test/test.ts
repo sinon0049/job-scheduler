@@ -84,7 +84,7 @@ describe('Test', () => {
     })
 
     after(async() => {
-        prisma.$executeRawUnsafe(`TRUNCATE TABLE "Job", "JobTrace" RESTART IDENTITY CASCADE`)
-        prisma.$disconnect()
+        await prisma.$executeRawUnsafe(`TRUNCATE TABLE "Job", "JobTrace" RESTART IDENTITY CASCADE`)
+        await prisma.$disconnect()
     })
 })
