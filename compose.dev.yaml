@@ -1,0 +1,24 @@
+x-common: &app-common
+  build:
+    dockerfile: Dockerfile.dev
+  env_file: 
+    - .env
+services:
+  app-1:
+    <<: *app-common
+    ports:
+      - "3000:3000"
+    environment:
+      - INSTANCE_NAME=inst-1
+  app-2:
+    <<: *app-common
+    ports:
+      - "3001:3000"
+    environment:
+      - INSTANCE_NAME=inst-2
+  app-3:
+    <<: *app-common
+    ports:
+      - "3002:3000"
+    environment:
+      - INSTANCE_NAME=inst-3

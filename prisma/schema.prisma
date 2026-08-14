@@ -6,6 +6,7 @@
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -15,22 +16,23 @@ datasource db {
 model Job {
   id Int @id @default(autoincrement())
   created_at DateTime @default(now())
-  updated_at DateTime @default(now())
+  updated_at DateTime @updatedAt
   run_at DateTime
-  type String
-  payload String
-  status Status
-  priority Int
+  status Status @default(PENDING)
   retry_count Int @default(0)
-  error Error[]
+  JobTrace JobTrace[]
+
+  @@index([retry_count, run_at], where: { status: "PENDING" }, map: "idx_job_scan")
+  @@index([updated_at], where: {status: "PROCESSING"}, map: "idx_job_recover")
 }
 
-model Error {
+model JobTrace {
   id Int @id @default(autoincrement())
-  job_id Int
-  message Status
+  jobId Int
   created_at DateTime @default(now())
-  job Job @relation(fields: [job_id], references: [id])
+  executedBy String
+  isSuccess Boolean
+  job Job @relation(fields: [jobId], references: [id])
 }
 
 enum Status {
