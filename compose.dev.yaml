@@ -2,7 +2,7 @@ x-common: &app-common
   build:
     dockerfile: Dockerfile.dev
   env_file: 
-    - .env
+    - .env.docker
 services:
   app-1:
     <<: *app-common
