@@ -9,7 +9,7 @@ async function main() {
     const TOTAL = 100000
     const BATCH_SIZE = 5000
 
-    await context.run({ action: 'SEED', jobCount: BATCH_SIZE }, async() => {
+    await context.run({ action: 'SEED' }, async() => {
         for(let i = 0; i < TOTAL; i += BATCH_SIZE) {
             const currentBatchData = []
 

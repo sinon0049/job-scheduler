@@ -33,12 +33,14 @@ describe('Test', () => {
     })
 
     test('Race condition test for scan', async() => {
+        // create job which run_at is 10 minutes ago
         await prisma.job.create({
             data: {
                 run_at: new Date(Date.now() - 10 * 60 * 1000)
             }
         })
 
+        // call scan * 10 and ensure that only one can claim the job
         const scanResult = await Promise.all(Array.from({ length: 10 }, () => jobServices.scanExpiredJobs()))
 
         let success = 0, failed = 0
@@ -55,6 +57,7 @@ describe('Test', () => {
     })
 
     test('Race condition test for recover', async() => {
+        // create job that is stuck in PROCESSING for over 11 minutes
         await prisma.job.create({
             data: {
                 run_at: new Date(),
@@ -63,6 +66,7 @@ describe('Test', () => {
             }
         })
 
+        // call recover * 10 and ensure that only one can recover the job
         const recoverResult = await Promise.all(Array.from({ length: 10 }, () => jobServices.recoverStuckJobsOnce()))
 
         let success = 0, failed = 0

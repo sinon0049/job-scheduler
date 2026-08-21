@@ -20,10 +20,9 @@ export class JobServices {
     }
 
     scanExpiredJobs = async() => {
-        const now = new Date()
-
         return await context.run({ action: 'SCAN' }, async() => {
             return await this.db.$transaction(async (tx) => {
+                // claim pending job and prevent multiple instances from claiming same job
                 const expiredJobs = await tx.$queryRaw<ProcessingJob[]>`
                     SELECT "id", "status", "retry_count" FROM "Job" 
                     WHERE "run_at" < NOW()
@@ -42,6 +41,7 @@ export class JobServices {
                     store.action = 'CLAIM'
                 }
 
+                // change the claimed jobs to PROCESSING
                 await tx.job.updateMany({
                     where: {
                         id: {
@@ -73,6 +73,9 @@ export class JobServices {
 
     recoverStuckJobsOnce = async() => {
         return await context.run({ action: 'RECOVER' }, async() => {
+            // claim stuck jobs and recover them to pending
+            // or fail if retry_count >= 3
+            // and prevent multiple instances from claiming same job
             const count = await this.db.$executeRaw`
                 WITH "stuck_jobs" AS (
                     SELECT "id" FROM "Job"
@@ -100,6 +103,7 @@ export class JobServices {
 
     processJob = async(job: ProcessingJob) => {
         try {
+            // 50 percent chance of completion/failure
             const int = crypto.randomInt(99)
             let isCompleted = false
             const currentRetryCount = job.retry_count
@@ -126,6 +130,7 @@ export class JobServices {
                         store.action = 'TRACE'
                     }
 
+                    // create trace record of this attempt no matter success or fail
                     await tx.jobTrace.create({
                         data: {
                             jobId: job.id,
@@ -146,6 +151,8 @@ export class JobServices {
         while(true) {
             try {
                 const expiredJobs = await this.scanExpiredJobs()
+
+                // scan per 1 second if having pending jobs, 5 seconds else
                 if(expiredJobs.length > 0) {
                     for(const j of expiredJobs) {
                         await this.processJob(j)
