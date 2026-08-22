@@ -11,7 +11,8 @@ export const prisma = new PrismaClient({
 })
 
 prisma.$on("query", (e) => {
-    if(process.env.NODE_ENV === 'test' || e.query === 'COMMIT' || e.query === 'BEGIN') return
+    // only works if LOG_LEVEL=debug
+    if(process.env.LOG_LEVEL !== 'debug' || e.query === 'COMMIT' || e.query === 'BEGIN') return
     const store = context.getStore()
     const duration = e.duration.toFixed(2)
     const timestamp = e.timestamp.toLocaleTimeString('zh-TW', {
@@ -21,11 +22,5 @@ prisma.$on("query", (e) => {
         second: '2-digit',
     })
 
-    if(store?.action === 'UPDATE') {
-        console.log(`[${context.getStore()?.action}]${store.jobCount} jobs, Duration: ${duration}ms, TimeStamp: ${timestamp}`)
-    } else if(store?.action === 'PROC') {
-        console.log(`[${context.getStore()?.action}]JobId: ${store.jobId}, Status: ${store.status}, Duration: ${duration}ms, TimeStamp: ${timestamp}`)
-    } else {
-        console.log(`[${context.getStore()?.action}]Duration: ${duration}ms, TimeStamp: ${timestamp}`)
-    }
+    console.log(`[QUERY][${store?.action}][${process.env.INSTANCE_NAME}]Duration: ${duration}ms, TimeStamp: ${timestamp}`)
 })

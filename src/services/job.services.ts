@@ -14,15 +14,15 @@ export class JobServices {
     createJob = async(data: CreateJobInput) => {
         return await context.run({ action: 'CREATE' }, async() => {
             const newJob = await this.db.job.create({ data })
+            console.log(`[CREATE][${process.env.INSTANCE_NAME}] id=${newJob.id}`)
             return newJob
-        }) 
+        })
     }
 
     scanExpiredJobs = async() => {
-        const now = new Date()
-
-        return await context.run({ action: 'SCAN', jobCount: 0 }, async() => {
+        return await context.run({ action: 'SCAN' }, async() => {
             return await this.db.$transaction(async (tx) => {
+                // claim pending job and prevent multiple instances from claiming same job
                 const expiredJobs = await tx.$queryRaw<ProcessingJob[]>`
                     SELECT "id", "status", "retry_count" FROM "Job" 
                     WHERE "run_at" < NOW()
@@ -31,14 +31,17 @@ export class JobServices {
                     LIMIT 20
                     FOR UPDATE SKIP LOCKED
                 `
+
+                console.log(`[SCAN][${process.env.INSTANCE_NAME}] found=${expiredJobs.length} ${process.env.LOG_LEVEL === 'debug' ? `id=[${expiredJobs.map((j) => j.id).join(', ')}]` : ''}`)
                 if(!expiredJobs.length) return []
+                
 
                 const store = context.getStore()
                 if(store) {
-                    store.action = 'UPDATE'
-                    store.jobCount = expiredJobs.length
+                    store.action = 'CLAIM'
                 }
 
+                // change the claimed jobs to PROCESSING
                 await tx.job.updateMany({
                     where: {
                         id: {
@@ -49,6 +52,7 @@ export class JobServices {
                         status: Status.PROCESSING
                     }
                 })
+                console.log(`[CLAIM][${process.env.INSTANCE_NAME}] count=${expiredJobs.length} status=PENDING->PROCESSING`)
 
                 return expiredJobs
             })
@@ -69,7 +73,10 @@ export class JobServices {
 
     recoverStuckJobsOnce = async() => {
         return await context.run({ action: 'RECOVER' }, async() => {
-            return await this.db.$executeRaw`
+            // claim stuck jobs and recover them to pending
+            // or fail if retry_count >= 3
+            // and prevent multiple instances from claiming same job
+            const count = await this.db.$executeRaw`
                 WITH "stuck_jobs" AS (
                     SELECT "id" FROM "Job"
                     WHERE "updated_at" < NOW() - INTERVAL '10 minutes'
@@ -88,19 +95,23 @@ export class JobServices {
                     SELECT "id" FROM "stuck_jobs"
                 )
             `
+
+            if(count > 0) console.log(`[RECOVER][${process.env.INSTANCE_NAME}] count=${count}`)
+            return count
         })
     }
 
     processJob = async(job: ProcessingJob) => {
         try {
+            // 50 percent chance of completion/failure
             const int = crypto.randomInt(99)
             let isCompleted = false
             const currentRetryCount = job.retry_count
             int < 50 ? isCompleted = true : isCompleted = false
 
-            await context.run({ action: 'PROC', jobId: job.id, status: isCompleted ? 'completed' : 'failed' }, async() => {
+            await context.run({ action: 'PROC' }, async() => {
                 return await this.db.$transaction(async(tx) => {
-                    await tx.job.update({
+                    const newObj = await tx.job.update({
                         where: {
                             id: job.id
                         },
@@ -112,6 +123,14 @@ export class JobServices {
                         }
                     })
 
+                    console.log(`[PROC][${process.env.INSTANCE_NAME}] id=${job.id} ${isCompleted ? 'completed' : 'failed'} status=PROCESSING->${newObj.status}`)
+
+                    const store = context.getStore()
+                    if(store) {
+                        store.action = 'TRACE'
+                    }
+
+                    // create trace record of this attempt no matter success or fail
                     await tx.jobTrace.create({
                         data: {
                             jobId: job.id,
@@ -119,6 +138,8 @@ export class JobServices {
                             isSuccess: isCompleted
                         }
                     })
+
+                    console.log(`[TRACE][${process.env.INSTANCE_NAME}] id=${job.id} ${isCompleted ? 'completed' : 'failed'}`)
                 })
             })
         } catch (error) {
@@ -130,6 +151,8 @@ export class JobServices {
         while(true) {
             try {
                 const expiredJobs = await this.scanExpiredJobs()
+
+                // scan per 1 second if having pending jobs, 5 seconds else
                 if(expiredJobs.length > 0) {
                     for(const j of expiredJobs) {
                         await this.processJob(j)

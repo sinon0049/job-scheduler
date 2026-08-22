@@ -33,10 +33,14 @@ describe('Test', () => {
     })
 
     test('Race condition test for scan', async() => {
-        const testJob = await jobServices.createJob({
-            run_at: new Date(),
+        // create job which run_at is 10 minutes ago
+        await prisma.job.create({
+            data: {
+                run_at: new Date(Date.now() - 10 * 60 * 1000)
+            }
         })
 
+        // call scan * 10 and ensure that only one can claim the job
         const scanResult = await Promise.all(Array.from({ length: 10 }, () => jobServices.scanExpiredJobs()))
 
         let success = 0, failed = 0
@@ -53,21 +57,16 @@ describe('Test', () => {
     })
 
     test('Race condition test for recover', async() => {
-        await prisma.$executeRaw`
-            INSERT INTO "Job" (
-                "run_at",
-                "updated_at",
-                "status",
-                "retry_count"
-            )
-            VALUES (
-                NOW(),
-                NOW() - INTERVAL '11 minutes',
-                'PROCESSING'::"Status",
-                0
-            )
-        `
+        // create job that is stuck in PROCESSING for over 11 minutes
+        await prisma.job.create({
+            data: {
+                run_at: new Date(),
+                updated_at: new Date(Date.now() - 11 * 60 * 1000),
+                status: 'PROCESSING'
+            }
+        })
 
+        // call recover * 10 and ensure that only one can recover the job
         const recoverResult = await Promise.all(Array.from({ length: 10 }, () => jobServices.recoverStuckJobsOnce()))
 
         let success = 0, failed = 0

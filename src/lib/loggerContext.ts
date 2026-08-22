@@ -1,10 +1,7 @@
 import { AsyncLocalStorage } from "async_hooks";
 
-interface LogContest {
+interface LogContext {
     action: string;
-    jobCount?: number;
-    jobId?: number;
-    status?: string;
 }
 
-export const context = new AsyncLocalStorage<LogContest>()
+export const context = new AsyncLocalStorage<LogContext>()
